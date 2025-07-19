@@ -97,7 +97,7 @@ export default function DailyEnglishApp() {
 
       if (wordData.source === "database_unavailable" || wordData.source === "emergency") {
         newDatabaseStatus = "fallback"
-      } else if (wordData.source === "ai" || wordData.source === "manual" || wordData.source === "ai_fallback") {
+      } else if (wordData.source === "ai" || wordData.source === "manual" || wordData.source === "ai_fallback" || wordData.source === "fallback") {
         newDatabaseStatus = "connected"
       } else {
         newDatabaseStatus = "unknown"
@@ -308,7 +308,8 @@ export default function DailyEnglishApp() {
       } else if (
         currentWord.source === "ai" ||
         currentWord.source === "manual" ||
-        currentWord.source === "ai_fallback"
+        currentWord.source === "ai_fallback" ||
+        currentWord.source === "fallback"
       ) {
         setDatabaseStatus("connected")
       } else {

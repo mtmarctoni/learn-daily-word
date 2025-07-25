@@ -20,7 +20,17 @@ export interface WordData {
   translation: string
   examples: string[]
   level: string
-  source?: "ai" | "fallback" | "manual" | "emergency"
+  source?:
+    | "ai"
+    | "curated"
+    | "smart_generated"
+    | "manual"
+    | "fallback"
+    | "database_unavailable"
+    | "emergency"
+    | "hardcoded"
+    | "ai_fallback"
+    | "generation_error"
   created_at?: string
   updated_at?: string
 }
@@ -83,7 +93,7 @@ export class WordsDatabase {
     }
 
     try {
-      console.log("Attempting to save word:", wordData.word)
+      console.log("Attempting to save word:", wordData.word, "with source:", wordData.source)
 
       const { data, error } = await supabase
         .from("daily_words")
@@ -102,10 +112,17 @@ export class WordsDatabase {
         if (error.code === "42501") {
           console.error("RLS policy violation. Check Row Level Security policies.")
         }
+        if (error.code === "23514") {
+          console.error("CHECK constraint violation. The source value is not allowed.")
+          console.error(
+            "Available sources: ai, curated, smart_generated, manual, fallback, database_unavailable, emergency, hardcoded, ai_fallback, generation_error",
+          )
+          console.error("Please run the update-source-constraint.sql script in Supabase.")
+        }
         return null
       }
 
-      console.log("Word saved successfully:", data.word)
+      console.log("Word saved successfully:", data.word, "with source:", data.source)
       return data
     } catch (error) {
       console.error("Error saving word:", error)

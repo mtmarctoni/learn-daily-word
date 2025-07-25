@@ -1,49 +1,52 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { WordsDatabase, FallbackWordsSystem, type WordData } from "@/lib/supabase"
+import { HuggingFaceWordGenerator, SmartWordBank } from "@/lib/huggingface"
 
-async function generateWordWithHuggingFace(date: string): Promise<Omit<WordData, "id" | "created_at" | "updated_at">> {
-  console.log(`Attempting to generate word with Hugging Face for date: ${date}`)
+async function generateWordWithSmartBank(date: string): Promise<Omit<WordData, "id" | "created_at" | "updated_at">> {
+  console.log(`Generating word for date: ${date}`)
 
-  if (!process.env.HUGGINGFACE_API_KEY) {
-    console.log("No Hugging Face API key found, using fallback word")
-    const fallbackWord = FallbackWordsSystem.getWordByDate(date)
-    return { ...fallbackWord, source: "ai_fallback" }
+  // First, try Hugging Face AI generation
+  if (HuggingFaceWordGenerator.isAvailable()) {
+    console.log("Hugging Face API key is available, attempting AI generation...")
+    try {
+      const aiWord = await HuggingFaceWordGenerator.generateWord(date)
+
+      if (aiWord && aiWord.word && aiWord.word.length > 3) {
+        console.log(`Successfully generated AI word: ${aiWord.word}`)
+        return {
+          date,
+          word: aiWord.word,
+          phonetic: aiWord.phonetic,
+          definition: aiWord.definition,
+          translation: aiWord.translation,
+          examples: aiWord.examples,
+          level: aiWord.level,
+          source: "ai",
+        }
+      } else {
+        console.log("AI generation returned invalid word, falling back to Smart Word Bank")
+      }
+    } catch (error) {
+      console.log("AI generation failed with error:", error.message, "- falling back to Smart Word Bank")
+    }
+  } else {
+    console.log("Hugging Face API key not configured, using Smart Word Bank")
   }
 
-  try {
-    // Simplified approach - use a more reliable model endpoint
-    const response = await fetch("https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        inputs: `Generate a B2-C1 English word with definition, phonetic, translation to Spanish, and 3 examples.`,
-        parameters: {
-          max_new_tokens: 150,
-          temperature: 0.7,
-          return_full_text: false,
-        },
-      }),
-    })
+  // Fallback to Smart Word Bank when AI fails or is not available
+  console.log("Using Smart Word Bank as fallback")
+  const smartWord = SmartWordBank.getWordForDate(date)
+  console.log(`Selected fallback word: ${smartWord.word} (Level: ${smartWord.level})`)
 
-    if (!response.ok) {
-      console.error(`Hugging Face API error: ${response.status} ${response.statusText}`)
-      const fallbackWord = FallbackWordsSystem.getWordByDate(date)
-      return { ...fallbackWord, source: "ai_fallback" }
-    }
-
-    const result = await response.json()
-    console.log("Hugging Face response:", result)
-
-    // If API response is not as expected, use fallback
-    const fallbackWord = FallbackWordsSystem.getWordByDate(date)
-    return { ...fallbackWord, source: "ai_fallback" }
-  } catch (error) {
-    console.error("Error with Hugging Face API:", error)
-    const fallbackWord = FallbackWordsSystem.getWordByDate(date)
-    return { ...fallbackWord, source: "ai_fallback" }
+  return {
+    date,
+    word: smartWord.word,
+    phonetic: smartWord.phonetic,
+    definition: smartWord.definition,
+    translation: smartWord.translation,
+    examples: smartWord.examples,
+    level: smartWord.level,
+    source: "curated", // Smart Word Bank as fallback
   }
 }
 
@@ -96,14 +99,16 @@ export async function GET(request: NextRequest, { params }: { params: { date: st
 
     console.log(`No existing word found, generating new word for ${date}`)
 
-    // Si no existe, generar nueva palabra
+    // Generate new word using Smart Word Bank (reliable)
     let newWordData
     try {
-      newWordData = await generateWordWithHuggingFace(date)
-      console.log("Generated word data:", newWordData.word)
+      newWordData = await generateWordWithSmartBank(date)
+      console.log("Generated word data:", newWordData.word, "with source:", newWordData.source)
     } catch (error) {
-      console.error("Error generating word:", error)
-      newWordData = FallbackWordsSystem.getWordByDate(date)
+      console.error("Error generating word with Smart Bank:", error)
+      // Ultimate fallback to old system
+      const fallbackWord = FallbackWordsSystem.getWordByDate(date)
+      newWordData = { ...fallbackWord, source: "generation_error" }
     }
 
     // Intentar guardar en la base de datos
@@ -114,7 +119,7 @@ export async function GET(request: NextRequest, { params }: { params: { date: st
       if (savedWord) {
         console.log(`Successfully saved new word: ${savedWord.word}`)
       } else {
-        console.log("Failed to save word to database")
+        console.log("Failed to save word to database (using generated word anyway)")
       }
     } catch (error) {
       console.error("Error saving word:", error)
@@ -122,21 +127,29 @@ export async function GET(request: NextRequest, { params }: { params: { date: st
 
     // Retornar la palabra (guardada o generada)
     const wordToReturn = savedWord || newWordData
-    console.log("Returning word:", wordToReturn.word)
+    console.log("Returning word:", wordToReturn.word, "with source:", wordToReturn.source)
     return NextResponse.json(wordToReturn)
   } catch (error) {
     console.error("=== API Route Error ===")
     console.error("Error details:", error)
-    console.error("Stack trace:", error instanceof Error ? error.stack : "No stack trace")
 
-    // Retornar palabra de emergencia usando el sistema de fallback
+    // Retornar palabra de emergencia usando Smart Word Bank
     try {
-      const emergencyWord = FallbackWordsSystem.getWordByDate(params.date)
-      const wordWithSource = { ...emergencyWord, source: "emergency" }
-      console.log("Returning emergency word:", wordWithSource.word)
+      const emergencyWord = SmartWordBank.getWordForDate(params.date)
+      const wordWithSource = {
+        date: params.date,
+        word: emergencyWord.word,
+        phonetic: emergencyWord.phonetic,
+        definition: emergencyWord.definition,
+        translation: emergencyWord.translation,
+        examples: emergencyWord.examples,
+        level: emergencyWord.level,
+        source: "emergency",
+      }
+      console.log("Returning emergency word from Smart Bank:", wordWithSource.word)
       return NextResponse.json(wordWithSource)
     } catch (fallbackError) {
-      console.error("Even fallback failed:", fallbackError)
+      console.error("Even Smart Word Bank failed:", fallbackError)
 
       // Última línea de defensa - palabra hardcodeada
       const hardcodedWord = {
@@ -151,7 +164,7 @@ export async function GET(request: NextRequest, { params }: { params: { date: st
           "Your learning journey requires resilient effort.",
         ],
         level: "B2",
-        source: "emergency",
+        source: "hardcoded",
       }
 
       return NextResponse.json(hardcodedWord)

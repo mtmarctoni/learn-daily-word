@@ -23,6 +23,9 @@ import {
   CheckCircle,
   Info,
   RefreshCw,
+  Brain,
+  Sparkles,
+  Award,
 } from "lucide-react"
 import { format, addDays, subDays } from "date-fns"
 import { es } from "date-fns/locale"
@@ -95,9 +98,20 @@ export default function DailyEnglishApp() {
       console.log("Word source:", wordData.source)
       let newDatabaseStatus: "connected" | "fallback" | "unknown" = "unknown"
 
-      if (wordData.source === "database_unavailable" || wordData.source === "emergency") {
+      if (
+        wordData.source === "database_unavailable" ||
+        wordData.source === "emergency" ||
+        wordData.source === "hardcoded"
+      ) {
         newDatabaseStatus = "fallback"
-      } else if (wordData.source === "ai" || wordData.source === "manual" || wordData.source === "ai_fallback" || wordData.source === "fallback") {
+      } else if (
+        wordData.source === "ai" ||
+        wordData.source === "manual" ||
+        wordData.source === "curated" ||
+        wordData.source === "smart_generated" ||
+        wordData.source === "ai_fallback" ||
+        wordData.source === "fallback"
+      ) {
         newDatabaseStatus = "connected"
       } else {
         newDatabaseStatus = "unknown"
@@ -208,6 +222,36 @@ export default function DailyEnglishApp() {
     fetchHistory()
   }
 
+  const getSourceIcon = (source?: string) => {
+    switch (source) {
+      case "ai":
+        return <Brain className="h-3 w-3 mr-1" />
+      case "curated":
+        return <Award className="h-3 w-3 mr-1" />
+      case "smart_generated":
+        return <Sparkles className="h-3 w-3 mr-1" />
+      case "manual":
+        return <Database className="h-3 w-3 mr-1" />
+      default:
+        return <Database className="h-3 w-3 mr-1" />
+    }
+  }
+
+  const getSourceColor = (source?: string) => {
+    switch (source) {
+      case "ai":
+        return "border-purple-200 bg-purple-50 text-purple-700"
+      case "curated":
+        return "border-emerald-200 bg-emerald-50 text-emerald-700"
+      case "smart_generated":
+        return "border-blue-200 bg-blue-50 text-blue-700"
+      case "manual":
+        return "border-green-200 bg-green-50 text-green-700"
+      default:
+        return "border-gray-200 bg-gray-50 text-gray-700"
+    }
+  }
+
   const WordCard = ({ word, showDate = false }: { word: WordData; showDate?: boolean }) => (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader className="text-center">
@@ -217,8 +261,8 @@ export default function DailyEnglishApp() {
               {word.level}
             </Badge>
             {word.source && (
-              <Badge variant="outline" className="text-xs">
-                <Database className="h-3 w-3 mr-1" />
+              <Badge variant="outline" className={`text-xs ${getSourceColor(word.source)}`}>
+                {getSourceIcon(word.source)}
                 {word.source}
               </Badge>
             )}
@@ -303,11 +347,17 @@ export default function DailyEnglishApp() {
     if (currentWord && currentWord.source) {
       console.log("Updating database status based on word source:", currentWord.source)
 
-      if (currentWord.source === "database_unavailable" || currentWord.source === "emergency") {
+      if (
+        currentWord.source === "database_unavailable" ||
+        currentWord.source === "emergency" ||
+        currentWord.source === "hardcoded"
+      ) {
         setDatabaseStatus("fallback")
       } else if (
         currentWord.source === "ai" ||
         currentWord.source === "manual" ||
+        currentWord.source === "curated" ||
+        currentWord.source === "smart_generated" ||
         currentWord.source === "ai_fallback" ||
         currentWord.source === "fallback"
       ) {
@@ -396,7 +446,8 @@ export default function DailyEnglishApp() {
                                   {word.level}
                                 </Badge>
                                 {word.source && (
-                                  <Badge variant="outline" className="text-xs">
+                                  <Badge variant="outline" className={`text-xs ${getSourceColor(word.source)}`}>
+                                    {getSourceIcon(word.source)}
                                     {word.source}
                                   </Badge>
                                 )}
@@ -443,7 +494,7 @@ export default function DailyEnglishApp() {
       <div className="max-w-4xl mx-auto">
         <header className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">Daily English Words</h1>
-          <p className="text-muted-foreground">AI-powered vocabulary with Supabase • Level B2-C1</p>
+          <p className="text-muted-foreground">30 curated B2-C1 vocabulary words • Professional quality content</p>
         </header>
 
         {/* Error Alert */}
@@ -467,8 +518,7 @@ export default function DailyEnglishApp() {
           <Alert className="mb-6 border-green-200 bg-green-50">
             <CheckCircle className="h-4 w-4 text-green-600" />
             <AlertDescription className="text-green-800">
-              <strong>Database connected!</strong> Full functionality enabled with persistent storage and AI word
-              generation.
+              <strong>System active!</strong> High-quality curated vocabulary with database storage enabled.
             </AlertDescription>
           </Alert>
         )}
@@ -477,7 +527,7 @@ export default function DailyEnglishApp() {
           <Alert className="mb-6">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Database not available. Using offline mode with pre-loaded words.
+              Database not available. Using offline mode with 30 high-quality curated words.
               <br />
               <strong>To enable full functionality:</strong> Run the SQL setup script in your Supabase dashboard.
             </AlertDescription>
@@ -488,7 +538,7 @@ export default function DailyEnglishApp() {
           <Alert className="mb-6 border-blue-200 bg-blue-50">
             <Info className="h-4 w-4 text-blue-600" />
             <AlertDescription className="text-blue-800">
-              <strong>Checking database connection...</strong> Words may be generated or loaded from cache.
+              <strong>Initializing system...</strong> Loading curated vocabulary collection.
             </AlertDescription>
           </Alert>
         )}

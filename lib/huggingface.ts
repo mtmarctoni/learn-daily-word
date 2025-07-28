@@ -13,6 +13,33 @@ export interface GeneratedWord {
 }
 
 export class HuggingFaceWordGenerator {
+  private static async getRandomWord(): Promise<string | null> {
+    try {
+      console.log("Fetching random word from API...")
+      const response = await fetch("https://random-word-api.herokuapp.com/word")
+
+      if (!response.ok) {
+        console.error("Random word API request failed:", response.status)
+        return null
+      }
+
+      const data = await response.json()
+      console.log("Random word API response:", data)
+
+      if (Array.isArray(data) && data.length > 0 && typeof data[0] === "string") {
+        const randomWord = data[0].toLowerCase()
+        console.log("Got random word:", randomWord)
+        return randomWord
+      }
+
+      console.error("Invalid response format from random word API")
+      return null
+    } catch (error) {
+      console.error("Error fetching random word:", error)
+      return null
+    }
+  }
+
   public static async generateWord(date: string): Promise<GeneratedWord | null> {
     if (!hf) {
       console.log("Hugging Face client not initialized - no API key")
@@ -21,6 +48,44 @@ export class HuggingFaceWordGenerator {
 
     console.log(`Attempting to generate word for date: ${date}`)
 
+    // First, get a random word
+    const randomWord = await this.getRandomWord()
+    if (!randomWord) {
+      console.log("Failed to get random word, falling back to Smart Word Bank")
+      return null
+    }
+
+    console.log(`Using random word: ${randomWord}`)
+
+    const aiPrompt = `You are an English vocabulary teacher. I will give you an English word, and you need to provide detailed information about it in JSON format.
+
+Word: "${randomWord}"
+
+Please respond with ONLY a valid JSON object in this exact format (no additional text, no markdown, no code blocks):
+
+{
+  "word": "${randomWord}",
+  "phonetic": "[IPA phonetic transcription with forward slashes]",
+  "definition": "[clear, concise definition in English]",
+  "translation": "[Spanish translation]",
+  "examples": [
+    "[example sentence using the word]",
+    "[another example sentence using the word]",
+    "[third example sentence using the word]"
+  ],
+  "level": "[B2 or C1 based on word difficulty]"
+}
+
+Requirements:
+- Use proper IPA phonetic notation with forward slashes
+- Provide a clear, educational definition
+- Give accurate Spanish translation
+- Create 3 realistic example sentences
+- Assign appropriate level (B2 for intermediate-advanced, C1 for advanced)
+- Respond with ONLY the JSON object, no other text
+
+Generate the information for the word "${randomWord}":`
+
     try {
       const chatCompletion = await hf.chatCompletion({
         provider: "groq",
@@ -28,26 +93,10 @@ export class HuggingFaceWordGenerator {
         messages: [
           {
             role: "user",
-            content: `Generate a B2-C1 level English vocabulary word for language learning.
-
-Please respond with ONLY a valid JSON object in this exact format (no additional text, no markdown, no code blocks):
-
-{
-  "word": "sophisticated",
-  "phonetic": "/səˈfɪstɪkeɪtɪd/",
-  "definition": "Having great knowledge or experience; complex and refined",
-  "translation": "sofisticado, refinado",
-  "examples": [
-    "The restaurant offers sophisticated cuisine from around the world.",
-    "She has a sophisticated understanding of international politics.",
-    "The software uses sophisticated algorithms to analyze data."
-  ],
-  "level": "C1"
-}
-
-Generate a new word following this exact JSON format:`,
+            content: aiPrompt,
           },
         ],
+        temperature: 0.3, // Lower temperature for more consistent formatting
       })
 
       console.log("Hugging Face chat completion response:", chatCompletion)

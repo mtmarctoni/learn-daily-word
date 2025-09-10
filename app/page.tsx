@@ -476,7 +476,7 @@ export default function DailyEnglishApp() {
                     ))}
                     {searchQuery && searchResults.length === 0 && !searching && (
                       <div className="text-center text-muted-foreground py-8">
-                        No words found matching "{searchQuery}"
+                        {`No words found matching "${searchQuery}"`}
                       </div>
                     )}
                   </div>
@@ -550,7 +550,7 @@ export default function DailyEnglishApp() {
           </Button>
 
           <div className="text-center">
-            <p className="text-sm text-muted-foreground">Today's Word</p>
+            <p className="text-sm text-muted-foreground">{`Today's Word`}</p>
             <p className="font-semibold flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               {format(currentDate, "d 'de' MMMM, yyyy", { locale: es })}
@@ -571,7 +571,7 @@ export default function DailyEnglishApp() {
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="ml-2">Loading today's word...</span>
+            <span className="ml-2">{`Loading today's word...`}</span>
           </div>
         ) : currentWord ? (
           <WordCard word={currentWord} />

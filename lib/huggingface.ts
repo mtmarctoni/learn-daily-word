@@ -1,61 +1,89 @@
-import { InferenceClient } from "@huggingface/inference"
+import { InferenceClient } from "@huggingface/inference";
 
+const urlRandomWordAPI = "https://wordsapiv1.p.rapidapi.com/words/?random=true";
+const rapidApiOptions = {
+  method: "GET",
+  headers: {
+    "X-RapidAPI-Key": process.env.RAPIDAPI_KEY || "",
+    "X-RapidAPI-Host": "wordsapiv1.p.rapidapi.com",
+  },
+};
 // Initialize Hugging Face client
-const hf = process.env.HUGGINGFACE_API_KEY ? new InferenceClient(process.env.HUGGINGFACE_API_KEY) : null
+const hf = process.env.HUGGINGFACE_API_KEY
+  ? new InferenceClient(process.env.HUGGINGFACE_API_KEY)
+  : null;
 
 export interface GeneratedWord {
-  word: string
-  phonetic: string
-  definition: string
-  translation: string
-  examples: string[]
-  level: string
+  word: string;
+  phonetic: string;
+  definition: string;
+  translation: string;
+  examples: string[];
+  level: string;
 }
 
 export class HuggingFaceWordGenerator {
   private static async getRandomWord(): Promise<string | null> {
     try {
-      console.log("Fetching random word from API...")
-      const response = await fetch("https://random-word-api.herokuapp.com/word")
+      console.log("Fetching random word from API...");
+      const response = await fetch(urlRandomWordAPI, rapidApiOptions);
 
       if (!response.ok) {
-        console.error("Random word API request failed:", response.status)
-        return null
+        console.error("Random word API request failed:", response.status);
+        return null;
       }
 
-      const data = await response.json()
-      console.log("Random word API response:", data)
+      const data = await response.json();
+      console.log("Random word API response:", data);
 
-      if (Array.isArray(data) && data.length > 0 && typeof data[0] === "string") {
-        const randomWord = data[0].toLowerCase()
-        console.log("Got random word:", randomWord)
-        return randomWord
+      // Handle object response with 'word' property
+      if (
+        typeof data === "object" &&
+        data.word &&
+        typeof data.word === "string"
+      ) {
+        const randomWord = data.word.toLowerCase();
+        console.log("Got random word:", randomWord);
+        return randomWord;
       }
 
-      console.error("Invalid response format from random word API")
-      return null
+      // Fallback for array response (legacy)
+      // if (
+      //   Array.isArray(data) &&
+      //   data.length > 0 &&
+      //   typeof data[0] === "string"
+      // ) {
+      //   const randomWord = data[0].toLowerCase();
+      //   console.log("Got random word (array):", randomWord);
+      //   return randomWord;
+      // }
+
+      console.error("Invalid response format from random word API");
+      return null;
     } catch (error) {
-      console.error("Error fetching random word:", error)
-      return null
+      console.error("Error fetching random word:", error);
+      return null;
     }
   }
 
-  public static async generateWord(date: string): Promise<GeneratedWord | null> {
+  public static async generateWord(
+    date: string
+  ): Promise<GeneratedWord | null> {
     if (!hf) {
-      console.log("Hugging Face client not initialized - no API key")
-      return null
+      console.log("Hugging Face client not initialized - no API key");
+      return null;
     }
 
-    console.log(`Attempting to generate word for date: ${date}`)
+    console.log(`Attempting to generate word for date: ${date}`);
 
     // First, get a random word
-    const randomWord = await this.getRandomWord()
+    const randomWord = await this.getRandomWord();
     if (!randomWord) {
-      console.log("Failed to get random word, falling back to Smart Word Bank")
-      return null
+      console.log("Failed to get random word, falling back to Smart Word Bank");
+      return null;
     }
 
-    console.log(`Using random word: ${randomWord}`)
+    console.log(`Using random word: ${randomWord}`);
 
     const aiPrompt = `You are an English vocabulary teacher. I will give you an English word, and you need to provide detailed information about it in JSON format.
 
@@ -84,7 +112,7 @@ Requirements:
 - Assign appropriate level (B2 for intermediate-advanced, C1 for advanced)
 - Respond with ONLY the JSON object, no other text
 
-Generate the information for the word "${randomWord}":`
+Generate the information for the word "${randomWord}":`;
 
     try {
       const chatCompletion = await hf.chatCompletion({
@@ -97,50 +125,55 @@ Generate the information for the word "${randomWord}":`
           },
         ],
         temperature: 0.3, // Lower temperature for more consistent formatting
-      })
+      });
 
-      console.log("Hugging Face chat completion response:", chatCompletion)
+      console.log("Hugging Face chat completion response:", chatCompletion);
 
-      if (chatCompletion && chatCompletion.choices && chatCompletion.choices[0] && chatCompletion.choices[0].message) {
-        const responseContent = chatCompletion.choices[0].message.content
-        console.log("AI response content:", responseContent)
+      if (
+        chatCompletion &&
+        chatCompletion.choices &&
+        chatCompletion.choices[0] &&
+        chatCompletion.choices[0].message
+      ) {
+        const responseContent = chatCompletion.choices[0].message.content;
+        console.log("AI response content:", responseContent);
 
         if (responseContent) {
-          const parsed = this.parseJSONResponse(responseContent)
+          const parsed = this.parseJSONResponse(responseContent);
           if (parsed) {
-            console.log("Successfully parsed AI-generated word:", parsed.word)
-            return parsed
+            console.log("Successfully parsed AI-generated word:", parsed.word);
+            return parsed;
           }
         }
       }
 
-      console.log("Failed to parse Hugging Face response")
-      return null
+      console.log("Failed to parse Hugging Face response");
+      return null;
     } catch (error) {
-      console.error("Error with Hugging Face chat completion:", error)
-      return null
+      console.error("Error with Hugging Face chat completion:", error);
+      return null;
     }
   }
 
   private static parseJSONResponse(text: string): GeneratedWord | null {
     try {
       // Clean the response text - remove any markdown code blocks or extra text
-      let cleanText = text.trim()
+      let cleanText = text.trim();
 
       // Remove markdown code blocks if present
-      cleanText = cleanText.replace(/```json\s*/g, "").replace(/```\s*/g, "")
+      cleanText = cleanText.replace(/```json\s*/g, "").replace(/```\s*/g, "");
 
       // Find JSON object in the text
-      const jsonStart = cleanText.indexOf("{")
-      const jsonEnd = cleanText.lastIndexOf("}")
+      const jsonStart = cleanText.indexOf("{");
+      const jsonEnd = cleanText.lastIndexOf("}");
 
       if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-        cleanText = cleanText.substring(jsonStart, jsonEnd + 1)
+        cleanText = cleanText.substring(jsonStart, jsonEnd + 1);
       }
 
-      console.log("Attempting to parse JSON:", cleanText)
+      console.log("Attempting to parse JSON:", cleanText);
 
-      const parsed = JSON.parse(cleanText)
+      const parsed = JSON.parse(cleanText);
 
       // Validate required fields
       if (
@@ -158,20 +191,20 @@ Generate the information for the word "${randomWord}":`
           translation: parsed.translation,
           examples: parsed.examples.slice(0, 3), // Take max 3 examples
           level: parsed.level || "B2",
-        }
+        };
       }
 
-      console.log("Parsed JSON is missing required fields")
-      return null
+      console.log("Parsed JSON is missing required fields");
+      return null;
     } catch (error) {
-      console.error("Error parsing JSON response:", error)
-      console.log("Raw text that failed to parse:", text)
-      return null
+      console.error("Error parsing JSON response:", error);
+      console.log("Raw text that failed to parse:", text);
+      return null;
     }
   }
 
   public static isAvailable(): boolean {
-    return hf !== null
+    return hf !== null;
   }
 }
 
@@ -181,7 +214,8 @@ export class SmartWordBank {
     {
       word: "articulate",
       phonetic: "/ɑːrˈtɪkjələt/",
-      definition: "Having or showing the ability to speak fluently and coherently",
+      definition:
+        "Having or showing the ability to speak fluently and coherently",
       translation: "articulado, elocuente",
       examples: [
         "She's very articulate when explaining complex topics.",
@@ -514,22 +548,26 @@ export class SmartWordBank {
       ],
       level: "C1",
     },
-  ]
+  ];
 
   public static getWordForDate(date: string): GeneratedWord {
     // Use date hash to consistently select the same word for the same date
-    const dateHash = date.split("-").reduce((acc, part) => acc + Number.parseInt(part), 0)
-    const selectedWord = this.words[dateHash % this.words.length]
+    const dateHash = date
+      .split("-")
+      .reduce((acc, part) => acc + Number.parseInt(part), 0);
+    const selectedWord = this.words[dateHash % this.words.length];
 
-    console.log(`Selected smart word for ${date}: ${selectedWord.word} (${selectedWord.level})`)
-    return selectedWord
+    console.log(
+      `Selected smart word for ${date}: ${selectedWord.word} (${selectedWord.level})`
+    );
+    return selectedWord;
   }
 
   public static getAllWords(): GeneratedWord[] {
-    return [...this.words]
+    return [...this.words];
   }
 
   public static getWordCount(): number {
-    return this.words.length
+    return this.words.length;
   }
 }
